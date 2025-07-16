@@ -11,7 +11,6 @@ app = Flask(__name__)
 S3_BUCKET = 'san-ocr-bucket'
 IMAGES_FILE = 'images.txt'
 
-# Create S3 client
 s3_client = boto3.client('s3')
 
 def get_presigned_url(key):
@@ -38,17 +37,14 @@ def index():
                 S3_BUCKET,
                 file.filename
             )
-            # Store filename in text file
             with open(IMAGES_FILE, 'a') as f:
                 f.write(file.filename + '\n')
 
-    # Read all stored keys
     image_keys = []
     if os.path.exists(IMAGES_FILE):
         with open(IMAGES_FILE, 'r') as f:
             image_keys = [line.strip() for line in f if line.strip()]
 
-    # Prepare image data for HTML
     images = []
     for key in image_keys:
         images.append({
@@ -60,34 +56,31 @@ def index():
 
 @app.route('/ocr', methods=['POST'])
 def ocr_image():
-    """
-    Receives a POST with JSON:
-    { "key": "filename.jpg" }
+    try:
+        data = request.get_json()
+        key = data.get('key')
 
-    Downloads image from S3 → sends to Google Vision → returns OCR text
-    """
-    data = request.get_json()
-    key = data.get('key')
+        if not key:
+            return jsonify({"error": "Missing 'key' in request."}), 400
 
-    # Download the image from S3 into memory
-    image_bytes = s3_client.get_object(Bucket=S3_BUCKET, Key=key)['Body'].read()
+        image_bytes = s3_client.get_object(Bucket=S3_BUCKET, Key=key)['Body'].read()
 
-    # Authenticate with Google using WIF (uses env var GOOGLE_APPLICATION_CREDENTIALS or default)
-    credentials, project_id = default()
-    credentials.refresh(GoogleRequest())
+        credentials, project_id = default()
+        credentials.refresh(GoogleRequest())
 
-    client = vision.ImageAnnotatorClient(credentials=credentials)
+        client = vision.ImageAnnotatorClient(credentials=credentials)
 
-    image = vision.Image(content=image_bytes)
-    response = client.text_detection(image=image)
+        image = vision.Image(content=image_bytes)
+        response = client.text_detection(image=image)
 
-    text = ''
-    if response.text_annotations:
-        text = response.text_annotations[0].description
+        text = ''
+        if response.text_annotations:
+            text = response.text_annotations[0].description
 
-    return jsonify({
-        "ocr_text": text.strip()
-    })
+        return jsonify({"ocr_text": text.strip()})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

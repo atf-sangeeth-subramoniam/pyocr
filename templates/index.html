@@ -12,12 +12,23 @@
                 },
                 body: JSON.stringify({ key: key })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error("Server error: " + text);
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
-                document.getElementById(textareaId).value = data.ocr_text;
+                if (data.error) {
+                    alert("OCR Error: " + data.error);
+                } else {
+                    document.getElementById(textareaId).value = data.ocr_text;
+                }
             })
             .catch(err => {
-                alert("Error running OCR: " + err);
+                alert("Error running OCR: " + err.message);
             });
         }
     </script>
