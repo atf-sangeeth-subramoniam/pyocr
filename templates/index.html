@@ -1,25 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Flask App</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <title>Upload to S3</title>
 </head>
 <body>
-    <nav class="nav_bar">
-        <header>
-            <h3>PYOCR</h3>
-        </header>
-    </nav>
-    
-    <main>
-        <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Esse et veniam enim voluptate minus iusto aperiam facilis atque eius maiores ex, rerum aut alias soluta, illum iste? Sapiente, inventore similique iure sunt itaque suscipit exercitationem rem voluptates quidem aperiam eligendi aliquid mollitia animi nisi excepturi. Necessitatibus perspiciatis temporibus neque praesentium dolorem. Laudantium quo iste facere aliquam officia dolorum, beatae tenetur nobis maxime officiis qui eum, iure repellendus id aliquid facilis sapiente ab, delectus excepturi deserunt culpa itaque asperiores esse! Nulla, natus deleniti? Laudantium, nisi molestiae impedit porro obcaecati ad aspernatur cumque, iure inventore enim fugiat veritatis quaerat atque, illum esse error qui aperiam nesciunt similique corrupti dolore vel voluptatem sunt facere. Sed vel fugit totam placeat vero aperiam natus aspernatur. Possimus, ex ipsum ratione numquam aut repudiandae molestias obcaecati, dolores, unde maxime mollitia cumque aliquid recusandae a deleniti culpa! Deserunt accusamus sed rerum necessitatibus, similique soluta repellendus odio ab nemo provident natus enim alias corrupti quas perspiciatis veritatis in sunt inventore architecto. Quae sed hic sint dolore doloremque ab adipisci provident. Recusandae debitis veritatis incidunt minus eos! Vero, ratione dolorum ipsum unde reiciendis soluta quod magnam doloribus officiis dignissimos aliquid iure, tenetur et commodi blanditiis accusantium eligendi neque accusamus esse!</p>
-    </main>
-    
-    
-    <footer>
-        <p>&copy; 2025 My Flask App</p>
-    </footer>
+    <h1>Upload Image to S3</h1>
+
+    <form action="/" method="post" enctype="multipart/form-data">
+        <input type="file" name="file" required>
+        <input type="submit" value="Upload">
+    </form>
+
+    {% if images %}
+        <h2>All Uploaded Images:</h2>
+        {% for img in images %}
+            <img src="{{ img }}" alt="Image" width="300" style="margin:10px;">
+        {% endfor %}
+    {% else %}
+        <p>No images uploaded yet.</p>
+    {% endif %}
 </body>
 </html>
