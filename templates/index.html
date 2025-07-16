@@ -3,9 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <title>Upload to S3</title>
+    <script>
+        function runOCR(key, textareaId) {
+            fetch("/ocr", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ key: key })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById(textareaId).value = data.ocr_text;
+            })
+            .catch(err => {
+                alert("Error running OCR: " + err);
+            });
+        }
+    </script>
 </head>
 <body>
-    <h1>Upload Image to S3 Updated!</h1>
+    <h1>Upload Image to S3</h1>
 
     <form action="/" method="post" enctype="multipart/form-data">
         <input type="file" name="file" required>
@@ -15,11 +33,15 @@
     {% if images %}
         <h2>All Uploaded Images:</h2>
         {% for img in images %}
-            <img src="{{ img }}" alt="Image" width="300" style="margin:10px;">
+            <div style="margin-bottom: 30px;">
+                <img src="{{ img.url }}" alt="Image" width="300" style="display:block; margin:10px 0;">
+                <button onclick="runOCR('{{ img.key }}', 'textarea_{{ loop.index }}')">Run OCR</button>
+                <br>
+                <textarea id="textarea_{{ loop.index }}" rows="5" cols="50" readonly></textarea>
+            </div>
         {% endfor %}
     {% else %}
         <p>No images uploaded yet.</p>
     {% endif %}
-
 </body>
 </html>

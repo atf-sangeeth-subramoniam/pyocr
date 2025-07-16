@@ -1,12 +1,17 @@
 import os
 import boto3
-from flask import Flask, render_template, request
+import json
+from flask import Flask, render_template, request, jsonify
+from google.auth import default
+from google.auth.transport.requests import Request as GoogleRequest
+from google.cloud import vision
 
 app = Flask(__name__)
 
 S3_BUCKET = 'san-ocr-bucket'
 IMAGES_FILE = 'images.txt'
 
+# Create S3 client
 s3_client = boto3.client('s3')
 
 def get_presigned_url(key):
@@ -33,7 +38,7 @@ def index():
                 S3_BUCKET,
                 file.filename
             )
-
+            # Store filename in text file
             with open(IMAGES_FILE, 'a') as f:
                 f.write(file.filename + '\n')
 
@@ -43,9 +48,46 @@ def index():
         with open(IMAGES_FILE, 'r') as f:
             image_keys = [line.strip() for line in f if line.strip()]
 
-    images = [get_presigned_url(key) for key in image_keys]
+    # Prepare image data for HTML
+    images = []
+    for key in image_keys:
+        images.append({
+            "url": get_presigned_url(key),
+            "key": key
+        })
 
     return render_template('index.html', images=images)
+
+@app.route('/ocr', methods=['POST'])
+def ocr_image():
+    """
+    Receives a POST with JSON:
+    { "key": "filename.jpg" }
+
+    Downloads image from S3 → sends to Google Vision → returns OCR text
+    """
+    data = request.get_json()
+    key = data.get('key')
+
+    # Download the image from S3 into memory
+    image_bytes = s3_client.get_object(Bucket=S3_BUCKET, Key=key)['Body'].read()
+
+    # Authenticate with Google using WIF (uses env var GOOGLE_APPLICATION_CREDENTIALS or default)
+    credentials, project_id = default()
+    credentials.refresh(GoogleRequest())
+
+    client = vision.ImageAnnotatorClient(credentials=credentials)
+
+    image = vision.Image(content=image_bytes)
+    response = client.text_detection(image=image)
+
+    text = ''
+    if response.text_annotations:
+        text = response.text_annotations[0].description
+
+    return jsonify({
+        "ocr_text": text.strip()
+    })
 
 if __name__ == '__main__':
     app.run(debug=True)
