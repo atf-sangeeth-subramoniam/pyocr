@@ -4,17 +4,10 @@ from flask import Flask, render_template, request
 
 app = Flask(__name__)
 
-S3_BUCKET = 'your-bucket-name'
+S3_BUCKET = 'san-ocr-bucket'
 IMAGES_FILE = 'images.txt'
 
-session = boto3.Session(
-    aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
-    aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
-    aws_session_token=os.environ.get("AWS_SESSION_TOKEN"),
-    region_name=os.environ.get("AWS_DEFAULT_REGION", "ap-northeast-1")
-)
-
-s3_client = session.client("s3")
+s3_client = boto3.client('s3')
 
 def get_presigned_url(key):
     return s3_client.generate_presigned_url(
