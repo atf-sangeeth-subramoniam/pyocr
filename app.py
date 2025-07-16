@@ -34,8 +34,7 @@ def index():
             s3_client.upload_fileobj(
                 file,
                 S3_BUCKET,
-                file.filename,
-                ExtraArgs={'ACL': 'public-read'}
+                file.filename
             )
 
             # Build the public S3 URL
