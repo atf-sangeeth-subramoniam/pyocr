@@ -5,7 +5,7 @@ from flask import Flask, render_template, request
 app = Flask(__name__)
 
 # Config
-S3_BUCKET = 'my-flask-images'
+S3_BUCKET = 'san-ocr-bucket'
 IMAGES_FILE = 'images.txt'
 
 # Create S3 client using env vars
