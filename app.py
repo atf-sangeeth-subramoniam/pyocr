@@ -4,11 +4,9 @@ from flask import Flask, render_template, request
 
 app = Flask(__name__)
 
-# Config
-S3_BUCKET = 'san-ocr-bucket'
+S3_BUCKET = 'your-bucket-name'
 IMAGES_FILE = 'images.txt'
 
-# Create S3 client using env vars
 session = boto3.Session(
     aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
     aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
@@ -17,6 +15,13 @@ session = boto3.Session(
 )
 
 s3_client = session.client("s3")
+
+def get_presigned_url(key):
+    return s3_client.generate_presigned_url(
+        'get_object',
+        Params={'Bucket': S3_BUCKET, 'Key': key},
+        ExpiresIn=3600
+    )
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -30,25 +35,22 @@ def index():
             return 'No selected file.'
 
         if file:
-            # Upload file to S3
             s3_client.upload_fileobj(
                 file,
                 S3_BUCKET,
                 file.filename
             )
 
-            # Build the public S3 URL
-            image_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{file.filename}"
-
-            # Save URL to file
             with open(IMAGES_FILE, 'a') as f:
-                f.write(image_url + '\n')
+                f.write(file.filename + '\n')
 
-    # Always read all stored URLs
-    images = []
+    # Read all stored keys
+    image_keys = []
     if os.path.exists(IMAGES_FILE):
         with open(IMAGES_FILE, 'r') as f:
-            images = [line.strip() for line in f if line.strip()]
+            image_keys = [line.strip() for line in f if line.strip()]
+
+    images = [get_presigned_url(key) for key in image_keys]
 
     return render_template('index.html', images=images)
 
