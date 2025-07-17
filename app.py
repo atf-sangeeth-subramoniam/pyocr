@@ -1,18 +1,24 @@
 import os
+import uuid
 import boto3
-import json
 from flask import Flask, render_template, request, jsonify
-from google.auth import default
-from google.auth.transport.requests import Request as GoogleRequest
-from google.cloud import vision
 
+from google.cloud import vision
+import google.auth
+
+# === Flask app setup ===
 app = Flask(__name__)
 
+# === Configuration ===
 S3_BUCKET = 'san-ocr-bucket'
-IMAGES_FILE = 'images.txt'
+WIF_CREDENTIALS_PATH = 'credentials/wif-cred.json'
+IMAGE_RECORD_FILE = 'images.txt'
 
+# === AWS S3 client ===
 s3_client = boto3.client('s3')
 
+
+# === Helper: Generate presigned S3 URL ===
 def get_presigned_url(key):
     return s3_client.generate_presigned_url(
         'get_object',
@@ -20,6 +26,8 @@ def get_presigned_url(key):
         ExpiresIn=3600
     )
 
+
+# === Route: Home page with upload form and image previews ===
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
@@ -27,68 +35,65 @@ def index():
             return 'No file part in request.'
 
         file = request.files['file']
-
         if file.filename == '':
             return 'No selected file.'
 
         if file:
-            s3_client.upload_fileobj(
-                file,
-                S3_BUCKET,
-                file.filename
-            )
-            with open(IMAGES_FILE, 'a') as f:
+            # Save file to S3
+            s3_client.upload_fileobj(file, S3_BUCKET, file.filename)
+
+            # Log the filename
+            with open(IMAGE_RECORD_FILE, 'a') as f:
                 f.write(file.filename + '\n')
 
+    # List all image URLs
     image_keys = []
-    if os.path.exists(IMAGES_FILE):
-        with open(IMAGES_FILE, 'r') as f:
+    if os.path.exists(IMAGE_RECORD_FILE):
+        with open(IMAGE_RECORD_FILE, 'r') as f:
             image_keys = [line.strip() for line in f if line.strip()]
 
-    images = []
-    for key in image_keys:
-        images.append({
-            "url": get_presigned_url(key),
-            "key": key
-        })
+    images = [{"url": get_presigned_url(key), "key": key} for key in image_keys]
 
     return render_template('index.html', images=images)
 
-from google.auth import default
-from google.auth.transport.requests import Request as GoogleRequest
-from google.cloud import vision
 
-# 12:31
+# === Route: OCR via Google Vision API ===
 @app.route('/ocr', methods=['POST'])
-def ocr_image():
+def ocr():
     try:
-        data = request.get_json()
-        key = data.get('key')
+        filename = request.json.get('filename')
+        if not filename:
+            return jsonify({'error': 'Filename is required'}), 400
 
-        if not key:
-            return jsonify({"error": "Missing 'key' in request."}), 400
+        # GCS URI used by Google Vision API
+        image_uri = f"gs://{S3_BUCKET}/{filename}"
 
-        # Download image from S3
-        image_bytes = s3_client.get_object(Bucket=S3_BUCKET, Key=key)['Body'].read()
+        # Load credentials using Workload Identity Federation
+        creds, _ = google.auth.load_credentials_from_file(
+            WIF_CREDENTIALS_PATH,
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
 
-        # Use default credentials - this will pick up the federated identity from EC2 metadata
-        credentials, project_id = default()
-        credentials.refresh(GoogleRequest())
+        # Initialize Vision client
+        client = vision.ImageAnnotatorClient(credentials=creds)
 
-        client = vision.ImageAnnotatorClient(credentials=credentials)
+        # Prepare image for OCR
+        image = vision.Image()
+        image.source.image_uri = image_uri
 
-        image = vision.Image(content=image_bytes)
+        # Perform OCR
         response = client.text_detection(image=image)
 
-        text = ''
-        if response.text_annotations:
-            text = response.text_annotations[0].description
+        if response.error.message:
+            return jsonify({'error': response.error.message}), 500
 
-        return jsonify({"ocr_text": text.strip()})
+        text = response.full_text_annotation.text
+        return jsonify({'text': text})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({'error': f"Server error: {str(e)}"}), 500
 
 
+# === Run Flask app ===
 if __name__ == '__main__':
     app.run(debug=True)
