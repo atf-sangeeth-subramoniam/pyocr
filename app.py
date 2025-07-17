@@ -54,14 +54,14 @@ def index():
 
     return render_template('index.html', images=images)
 
+from google.auth import default
+from google.auth.transport.requests import Request as GoogleRequest
+from google.cloud import vision
+
+# 12:31
 @app.route('/ocr', methods=['POST'])
 def ocr_image():
     try:
-        from google.auth import impersonated_credentials
-        from google.auth.transport.requests import Request as GoogleRequest
-        from google.auth import aws
-        from google.cloud import vision
-
         data = request.get_json()
         key = data.get('key')
 
@@ -71,15 +71,10 @@ def ocr_image():
         # Download image from S3
         image_bytes = s3_client.get_object(Bucket=S3_BUCKET, Key=key)['Body'].read()
 
-        # Create AWS credentials adapter for Workload Identity Federation
-        credentials = aws.Credentials(
-            identity_pool_provider="arn:aws:sts::458575205268:assumed-role/san-ocr-s3-bucket-access",  # This is the AWS role on EC2
-            subject_token_type="urn:ietf:params:aws:token-type:aws4_request",
-            audience="//iam.googleapis.com/projects/180272852791/locations/global/workloadIdentityPools/ocr-aws-to-google-vision/providers/ocr-aws-provider"
-        )
+        # Use default credentials - this will pick up the federated identity from EC2 metadata
+        credentials, project_id = default()
         credentials.refresh(GoogleRequest())
 
-        # Vision client with federated credentials
         client = vision.ImageAnnotatorClient(credentials=credentials)
 
         image = vision.Image(content=image_bytes)
